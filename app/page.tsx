@@ -8,6 +8,7 @@ import {
   Pencil, Scissors, ScrollText, Settings2, ShieldCheck, Sparkles, Trash2, Upload, Users, WandSparkles,
 } from "lucide-react";
 import { toast, Toaster } from "sonner";
+import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -876,7 +877,7 @@ export default function Home() {
     }
   };
   const createModelProvider = (): ModelProvider => {
-    return createConfiguredModelProvider(modelConfig);
+    return createConfiguredModelProvider({ ...modelConfig, ...(isDesktopRuntime() ? { fetchImpl: tauriFetch } : {}) });
   };
   const refreshAiTasks = async () => {
     if (!isDesktopRuntime() || !activeProjectId) return;

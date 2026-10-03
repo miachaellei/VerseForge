@@ -9,6 +9,7 @@ export interface ModelProviderConfig {
   baseUrl: string;
   apiKey: string;
   id?: string;
+  fetchImpl?: typeof fetch;
 }
 
 /**
@@ -19,7 +20,7 @@ export function createModelProvider(config: ModelProviderConfig): ModelProvider 
   const baseUrl = config.baseUrl.trim();
   if (!baseUrl || !config.apiKey.trim()) throw new Error("请先填写模型网关地址和访问令牌");
   const id = config.id ?? `${config.protocol}-session`;
-  const adapterConfig = { id, baseUrl, apiKey: config.apiKey };
+  const adapterConfig = { id, baseUrl, apiKey: config.apiKey, fetchImpl: config.fetchImpl };
   if (config.protocol === "platform") return new PlatformProvider(adapterConfig);
   if (config.protocol === "anthropic") return new AnthropicProvider(adapterConfig);
   if (config.protocol === "gemini") return new GeminiProvider(adapterConfig);

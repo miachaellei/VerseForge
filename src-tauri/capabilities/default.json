@@ -3,5 +3,17 @@
   "identifier": "default",
   "description": "Default capability for the main local story workspace window",
   "windows": ["main"],
-  "permissions": ["core:default", "dialog:allow-open", "dialog:allow-save"]
+  "permissions": [
+    "core:default",
+    "dialog:allow-open",
+    "dialog:allow-save",
+    {
+      "identifier": "http:default",
+      "allow": [
+        { "url": "https://**" },
+        { "url": "http://localhost/**" },
+        { "url": "http://127.0.0.1/**" }
+      ]
+    }
+  ]
 }
