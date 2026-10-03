@@ -1,0 +1,35 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "声篇工坊",
+  "version": "0.1.0",
+  "identifier": "com.shengpian.storyrewriter",
+  "build": {
+    "beforeDevCommand": "node node_modules/vite/bin/vite.js --config vite.desktop.config.ts",
+    "devUrl": "http://127.0.0.1:1420",
+    "beforeBuildCommand": "node node_modules/vite/bin/vite.js build --config vite.desktop.config.ts",
+    "frontendDist": "../dist-desktop"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "声篇工坊 · 本地小说翻写",
+        "width": 1440,
+        "height": 920,
+        "minWidth": 1100,
+        "minHeight": 700,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost data:; style-src 'self' 'unsafe-inline'; connect-src 'self' https: http://127.0.0.1:*; font-src 'self' data:"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "Productivity",
+    "shortDescription": "本地优先的 AI 小说翻写工作台",
+    "longDescription": "导入、分析、重构并翻写长篇小说，原作和创作数据优先保存在本机。"
+  }
+}

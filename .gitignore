@@ -36,7 +36,15 @@ yarn-error.log*
 
 # typescript
 next-env.d.ts
+*.tsbuildinfo
 /dist/
+/dist-desktop/
+src-tauri/target/
+/src-tauri/binaries/
+__pycache__/
+*.py[cod]
+services/local-worker/build/
+services/local-worker/*.egg-info/
 /.wrangler/
 # Checkout-local execution profile and tool state; never publish them.
 /.sites-runtime/

@@ -1,0 +1,14 @@
+[project]
+name = "story-rewriter-worker"
+version = "0.1.0"
+description = "Local document parsing and AI workflow worker for the story rewriter desktop app"
+requires-python = ">=3.11"
+dependencies = [
+  "pypdf>=6,<7",
+]
+
+[project.optional-dependencies]
+test = ["reportlab>=4,<5"]
+
+[tool.unittest]
+start-directory = "tests"
