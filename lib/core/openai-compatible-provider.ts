@@ -32,7 +32,10 @@ export class OpenAiCompatibleProvider implements ModelProvider {
     this.id = config.id;
     this.#baseUrl = config.baseUrl.replace(/\/+$/, "");
     this.#apiKey = config.apiKey;
-    this.#fetch = config.fetchImpl ?? fetch;
+    // `Window.fetch` is a brand method in WebKit. Passing the bare function
+    // loses its receiver and throws "Can only call Window.fetch on instances
+    // of Window" in the Tauri WebView, so always bind the global object.
+    this.#fetch = config.fetchImpl ?? globalThis.fetch.bind(globalThis);
     this.#capabilities = {
       streaming: true,
       tools: true,
@@ -185,4 +188,3 @@ async function providerError(response: Response): Promise<Error> {
         : "模型请求失败";
   return new Error(`${category}（HTTP ${response.status}）${detail ? `：${detail}` : ""}`);
 }
-

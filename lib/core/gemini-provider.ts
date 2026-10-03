@@ -26,7 +26,7 @@ export class GeminiProvider implements ModelProvider {
     this.id = config.id;
     this.#apiKey = config.apiKey;
     this.#baseUrl = (config.baseUrl ?? "https://generativelanguage.googleapis.com").replace(/\/+$/, "");
-    this.#fetch = config.fetchImpl ?? fetch;
+    this.#fetch = config.fetchImpl ?? globalThis.fetch.bind(globalThis);
   }
 
   async listModels(): Promise<string[]> {

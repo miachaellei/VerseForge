@@ -61,7 +61,7 @@ export class PlatformProvider implements ModelProvider {
     this.id = config.id ?? "platform-gateway";
     this.#baseUrl = config.baseUrl.replace(/\/+$/, "");
     this.#apiKey = config.apiKey;
-    this.#fetch = config.fetchImpl ?? fetch;
+    this.#fetch = config.fetchImpl ?? globalThis.fetch.bind(globalThis);
     this.#delegate = new OpenAiCompatibleProvider({ ...config, id: this.id });
   }
 

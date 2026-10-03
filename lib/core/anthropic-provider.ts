@@ -23,7 +23,7 @@ export class AnthropicProvider implements ModelProvider {
     this.#apiKey = config.apiKey;
     this.#baseUrl = (config.baseUrl ?? "https://api.anthropic.com").replace(/\/+$/, "");
     this.#apiVersion = config.apiVersion ?? "2023-06-01";
-    this.#fetch = config.fetchImpl ?? fetch;
+    this.#fetch = config.fetchImpl ?? globalThis.fetch.bind(globalThis);
   }
 
   async listModels(): Promise<string[]> {
