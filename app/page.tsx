@@ -104,6 +104,31 @@ const synopsisFieldLabels: Record<keyof SynopsisValue, string> = { logline: "一
 const worldbuildingFieldLabels: Record<keyof WorldbuildingValue, string> = { era: "时代与时间背景", geography: "地理与地点", society: "社会与势力", technology: "技术与生活", powerSystem: "力量体系", rules: "世界硬规则", taboos: "禁忌与不可改动项" };
 const characterFieldLabels: Record<Exclude<keyof Character, "id">, string> = { name: "角色名称", role: "角色功能", age: "年龄段", build: "身形体态", personality: "核心性格", speech: "说话风格", accent: "语言与口音", goal: "核心目标", secret: "秘密" };
 
+const defaultCharacter = (id: number): Character => ({ id, name: "未命名角色", role: "次要角色", age: "青年（25–35）", build: "匀称", personality: ["待完善"], speech: "自然", accent: "普通话 · 无明显口音", goal: "待补充", secret: "待补充" });
+
+function normalizeCharacter(value: unknown, fallbackId: number): Character {
+  const raw = value && typeof value === "object" ? value as Partial<Character> : {};
+  const id = typeof raw.id === "number" && Number.isFinite(raw.id) ? raw.id : fallbackId;
+  const fallback = defaultCharacter(id);
+  const personality = Array.isArray(raw.personality) ? raw.personality.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
+  return {
+    id,
+    name: typeof raw.name === "string" && raw.name.trim() ? raw.name : fallback.name,
+    role: typeof raw.role === "string" && raw.role.trim() ? raw.role : fallback.role,
+    age: typeof raw.age === "string" && raw.age.trim() ? raw.age : fallback.age,
+    build: typeof raw.build === "string" && raw.build.trim() ? raw.build : fallback.build,
+    personality: personality.length ? personality : fallback.personality,
+    speech: typeof raw.speech === "string" && raw.speech.trim() ? raw.speech : fallback.speech,
+    accent: typeof raw.accent === "string" && raw.accent.trim() ? raw.accent : fallback.accent,
+    goal: typeof raw.goal === "string" && raw.goal.trim() ? raw.goal : fallback.goal,
+    secret: typeof raw.secret === "string" && raw.secret.trim() ? raw.secret : fallback.secret,
+  };
+}
+
+function normalizeCharacters(value: unknown): Character[] {
+  return Array.isArray(value) ? value.map((item, index) => normalizeCharacter(item, index + 1)) : [];
+}
+
 const CHAPTER_MEMORY_SCHEMA = {
   type: "object",
   additionalProperties: false,
@@ -367,7 +392,7 @@ export default function Home() {
       try {
         const data = JSON.parse(raw);
         if (data.projects?.length) {
-          const normalized = data.projects.map((item: Project) => ({ ...item, outline: item.outline ?? [], relations: item.relations ?? [], timeline: item.timeline ?? [] }));
+          const normalized = data.projects.map((item: Project) => ({ ...item, characters: normalizeCharacters(item.characters), outline: item.outline ?? [], relations: item.relations ?? [], timeline: item.timeline ?? [] }));
           setProjects(normalized);
           if (Array.isArray(data.trashedProjects)) setTrashedProjects(data.trashedProjects);
           const selectedId = data.activeProjectId ?? data.projects[0].id;
@@ -388,7 +413,7 @@ export default function Home() {
           const data = JSON.parse(legacy);
           if (data.points) setPoints(data.points);
           if (data.synopsis) setSynopsis(data.synopsis);
-          if (data.characters) setCharacters(data.characters);
+          if (data.characters) setCharacters(normalizeCharacters(data.characters));
           if (data.chapter) setChapter(data.chapter);
         } catch { /* 保留样例数据 */ }
       }
@@ -478,9 +503,10 @@ export default function Home() {
         const savedFieldLocks = entries.find((entry) => entry.kind === "field_locks");
         if (savedSynopsis) setSynopsis(savedSynopsis.value as SynopsisValue);
         setWorldbuilding(savedWorldbuilding ? savedWorldbuilding.value as WorldbuildingValue : emptyWorldbuilding);
-        const restoredCharacters = savedCharacters && Array.isArray(savedCharacters.value) ? savedCharacters.value as Character[] : [];
+        const restoredCharacters = normalizeCharacters(savedCharacters?.value);
         setCharacters(restoredCharacters);
         setSelectedCharacter(restoredCharacters[0]?.id ?? 0);
+        setSynopsisDirty(false);
         setRelations(savedRelations && Array.isArray(savedRelations.value) ? savedRelations.value as RelationValue[] : []);
         setTimeline(savedTimeline && Array.isArray(savedTimeline.value) ? savedTimeline.value as TimelineValue[] : []);
         setLocations(savedLocations && Array.isArray(savedLocations.value) ? savedLocations.value as LocationValue[] : []);
@@ -683,7 +709,7 @@ export default function Home() {
     setSynopsisDirty(false);
     setActiveProjectId(id);
     setSynopsis(selected.synopsis);
-    setCharacters(selected.characters);
+    setCharacters(normalizeCharacters(selected.characters));
     setRelations(selected.relations);
     setTimeline(selected.timeline);
     setLocations([]);
@@ -1137,6 +1163,7 @@ export default function Home() {
         }
       }
       setSynopsis(next);
+      if (isDesktopRuntime()) await desktopBridge.saveStoryBible({ projectId: activeProjectId, kind: "synopsis", value: next });
       setSynopsisCandidate(null);
       setSynopsisCandidateId(null);
       setPendingImpact(null);
@@ -2141,7 +2168,7 @@ export default function Home() {
       setActiveProjectId(record.id);
       setSynopsis(backup.storyBible.synopsis && typeof backup.storyBible.synopsis === "object" ? backup.storyBible.synopsis as SynopsisValue : emptyProject.synopsis);
       setWorldbuilding(backup.storyBible.worldbuilding && typeof backup.storyBible.worldbuilding === "object" ? backup.storyBible.worldbuilding as WorldbuildingValue : emptyWorldbuilding);
-      setCharacters(Array.isArray(backup.storyBible.characters) ? backup.storyBible.characters as Character[] : []);
+      setCharacters(normalizeCharacters(backup.storyBible.characters));
       setRelations(Array.isArray(backup.storyBible.relations) ? backup.storyBible.relations as RelationValue[] : []);
       setLocations(Array.isArray(backup.storyBible.locations) ? backup.storyBible.locations as LocationValue[] : []);
       setTimeline(Array.isArray(backup.storyBible.timeline) ? backup.storyBible.timeline as TimelineValue[] : []);
@@ -2501,12 +2528,14 @@ function Synopsis({ synopsis, setSynopsis, onAi }: { synopsis: typeof initialSyn
   return <><SectionHeader eyebrow="故事圣经 · 01" title="故事梗概" description="先固定故事的核心承诺，再让 AI 帮你扩展。带锁内容不会进入自动改写范围。" action={<Button onClick={onAi}><WandSparkles className="mr-2 size-4" />AI 深化 · 120 点</Button>} /><div className="grid gap-4 xl:grid-cols-[1fr_340px]"><div className="rounded-2xl border bg-card p-5 md:p-7"><div className="grid gap-5 md:grid-cols-2"><Field label="一句话故事" wide><textarea className={`${input} min-h-20 resize-y`} value={synopsis.logline} onChange={(e) => setSynopsis((s) => ({ ...s, logline: e.target.value }))} /></Field><Field label="完整故事梗概" wide><textarea className={`${input} min-h-40 resize-y`} value={synopsis.summary} onChange={(e) => setSynopsis((s) => ({ ...s, summary: e.target.value }))} /></Field><Field label="主题"><input className={input} value={synopsis.theme} onChange={(e) => setSynopsis((s) => ({ ...s, theme: e.target.value }))} /></Field><Field label="核心冲突"><textarea className={`${input} min-h-24`} value={synopsis.conflict} onChange={(e) => setSynopsis((s) => ({ ...s, conflict: e.target.value }))} /></Field><Field label="结局锚点" wide><textarea className={`${input} min-h-24`} value={synopsis.ending} onChange={(e) => setSynopsis((s) => ({ ...s, ending: e.target.value }))} /></Field></div></div><aside className="rounded-2xl border bg-card p-5"><div className="flex items-center gap-2 text-sm font-semibold"><Check className="size-4 text-emerald-600" />不可修改约束</div><p className="mt-2 text-xs leading-5 text-muted-foreground">AI 生成、续写和一致性检查都会遵守这些约束。</p><textarea className={`${input} mt-4 min-h-40`} value={synopsis.locked} onChange={(e) => setSynopsis((s) => ({ ...s, locked: e.target.value }))} /><div className="mt-5 rounded-xl bg-emerald-50 p-4 text-xs leading-5 text-emerald-800">当前 3 条约束已加入项目级记忆。</div></aside></div></>;
 }
 
-function Characters({ characters, character, locks, onToggleLock, select, update, add, onAi }: { characters: Character[]; character: Character | undefined; locks: FieldLock[]; onToggleLock: (path: string, label: string, value: unknown) => Promise<void>; select: (id: number) => void; update: (p: Partial<Character>) => void; add: () => void; onAi: () => void }) {
+function Characters({ characters, character: rawCharacter, locks, onToggleLock, select, update, add, onAi }: { characters: Character[]; character: Character | undefined; locks: FieldLock[]; onToggleLock: (path: string, label: string, value: unknown) => Promise<void>; select: (id: number) => void; update: (p: Partial<Character>) => void; add: () => void; onAi: () => void }) {
+  const safeCharacters = normalizeCharacters(characters);
+  const character = rawCharacter ? normalizeCharacter(rawCharacter, rawCharacter.id) : undefined;
   const selectClass = "w-full rounded-xl border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary";
   const options = ["敏锐", "克制", "执拗", "沉稳", "疏离", "守诺", "圆滑", "谨慎", "幽默", "冲动"];
   const lockPanel = character ? <div className="flex flex-wrap items-center gap-2 rounded-2xl border bg-card p-4"><span className="mr-2 text-xs font-semibold text-muted-foreground">字段锁定</span>{Object.entries(characterFieldLabels).map(([key, label]) => { const path = `characters.${character.id}.${key}`; const locked = locks.some((item) => item.path === path); return <button type="button" key={key} onClick={() => void onToggleLock(path, label, character[key as keyof Character])} className={`inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs ${locked ? "border-amber-300 bg-amber-100 text-amber-900" : "hover:border-primary/40"}`}>{locked ? <Lock className="size-3" /> : <LockOpen className="size-3" />}{label}</button>; })}</div> : null;
   if (!character) return <><SectionHeader eyebrow="故事圣经 · 02" title="人物角色管理" description="这个项目还没有人物。先建立第一位角色，再逐步补全结构化档案。" action={<Button onClick={add}><Plus className="mr-2 size-4" />新建第一个角色</Button>} /><div className="rounded-2xl border border-dashed bg-card p-16 text-center"><Users className="mx-auto size-10 text-muted-foreground" /><h2 className="mt-4 text-lg font-semibold">从主角开始</h2><p className="mt-2 text-sm text-muted-foreground">手工建立角色不扣点，之后可以按需使用 AI 深化。</p><Button className="mt-5" onClick={add}>新建角色</Button></div></>;
-  return <><SectionHeader eyebrow="故事圣经 · 02" title="人物角色管理" description="用结构化选项建立稳定人物档案；自由文本只补充角色的独特部分。手工编辑不扣点。" action={<div className="flex gap-2"><Button variant="outline" onClick={add}><Plus className="mr-2 size-4" />新建角色</Button><Button onClick={onAi}><Sparkles className="mr-2 size-4" />AI 生成候选</Button></div>} />{lockPanel}<div className="grid gap-4 lg:grid-cols-[260px_1fr]"><aside className="rounded-2xl border bg-card p-3"><p className="px-2 pb-3 pt-1 text-xs font-semibold text-muted-foreground">角色库 · {characters.length}</p><div className="space-y-1">{characters.map((item) => <button key={item.id} onClick={() => select(item.id)} className={`flex w-full items-center gap-3 rounded-xl p-3 text-left transition ${item.id === character.id ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}><span className={`grid size-9 place-items-center rounded-full text-sm font-semibold ${item.id === character.id ? "bg-white/15" : "bg-primary/10 text-primary"}`}>{item.name.slice(0, 1)}</span><span><strong className="block text-sm">{item.name}</strong><small className={item.id === character.id ? "text-white/65" : "text-muted-foreground"}>{item.role}</small></span></button>)}</div></aside><div className="rounded-2xl border bg-card p-5 md:p-7"><div className="mb-6 flex items-center justify-between"><div><input className="border-0 bg-transparent text-2xl font-semibold outline-none" value={character.name} onChange={(e) => update({ name: e.target.value })} /><p className="mt-1 text-xs text-muted-foreground">ID CHAR-{String(character.id).slice(-4)} · 已加入章节上下文</p></div><Badge variant="secondary">正式设定</Badge></div><Tabs defaultValue="profile"><TabsList><TabsTrigger value="profile">形象与性格</TabsTrigger><TabsTrigger value="voice">说话与口音</TabsTrigger><TabsTrigger value="arc">动机与秘密</TabsTrigger></TabsList><TabsContent value="profile" className="mt-5 grid gap-5 md:grid-cols-2"><Field label="角色功能"><select className={selectClass} value={character.role} onChange={(e) => update({ role: e.target.value })}>{["主角", "关键角色", "对立角色", "次要角色"].map((x) => <option key={x}>{x}</option>)}</select></Field><Field label="年龄段"><select className={selectClass} value={character.age} onChange={(e) => update({ age: e.target.value })}>{["少年（13–17）", "青年（18–24）", "青年（25–35）", "中年（36–50）", "年长（51+）"].map((x) => <option key={x}>{x}</option>)}</select></Field><Field label="身形体态"><select className={selectClass} value={character.build} onChange={(e) => update({ build: e.target.value })}>{["清瘦", "匀称", "高挑", "健壮", "魁梧"].map((x) => <option key={x}>{x}</option>)}</select></Field><Field label="核心性格"><div className="flex flex-wrap gap-2">{options.map((x) => <button key={x} onClick={() => update({ personality: character.personality.includes(x) ? character.personality.filter((p) => p !== x) : [...character.personality.filter((p) => p !== "待完善"), x] })} className={`rounded-full border px-3 py-1.5 text-xs ${character.personality.includes(x) ? "border-primary bg-primary text-white" : "bg-background hover:border-primary/50"}`}>{x}</button>)}</div></Field></TabsContent><TabsContent value="voice" className="mt-5 grid gap-5 md:grid-cols-2"><Field label="说话风格"><select className={selectClass} value={character.speech} onChange={(e) => update({ speech: e.target.value })}>{["短句、直接、很少解释", "语速偏慢，习惯用反问", "礼貌正式，回避肯定回答", "自然", "用词华丽、长句为主"].map((x) => <option key={x}>{x}</option>)}</select></Field><Field label="语言与口音"><select className={selectClass} value={character.accent} onChange={(e) => update({ accent: e.target.value })}>{["普通话 · 无明显口音", "普通话 · 轻微江南口音", "普通话 · 轻微北方口音", "粤语 · 广府口音", "四川话 · 成都口音"].map((x) => <option key={x}>{x}</option>)}</select></Field><div className="md:col-span-2 rounded-xl bg-muted p-4 text-xs leading-5 text-muted-foreground">这些语言特征会进入章节生成上下文，用于保持角色说话方式前后一致。</div></TabsContent><TabsContent value="arc" className="mt-5 grid gap-5"><Field label="核心目标"><textarea className={`${selectClass} min-h-24`} value={character.goal} onChange={(e) => update({ goal: e.target.value })} /></Field><Field label="秘密（仅在允许章节后加入上下文）"><textarea className={`${selectClass} min-h-24`} value={character.secret} onChange={(e) => update({ secret: e.target.value })} /></Field></TabsContent></Tabs></div></div></>;
+  return <><SectionHeader eyebrow="故事圣经 · 02" title="人物角色管理" description="用结构化选项建立稳定人物档案；自由文本只补充角色的独特部分。手工编辑不扣点。" action={<div className="flex gap-2"><Button variant="outline" onClick={add}><Plus className="mr-2 size-4" />新建角色</Button><Button onClick={onAi}><Sparkles className="mr-2 size-4" />AI 生成候选</Button></div>} />{lockPanel}<div className="grid gap-4 lg:grid-cols-[260px_1fr]"><aside className="rounded-2xl border bg-card p-3"><p className="px-2 pb-3 pt-1 text-xs font-semibold text-muted-foreground">角色库 · {safeCharacters.length}</p><div className="space-y-1">{safeCharacters.map((item) => <button key={item.id} onClick={() => select(item.id)} className={`flex w-full items-center gap-3 rounded-xl p-3 text-left transition ${item.id === character.id ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}><span className={`grid size-9 place-items-center rounded-full text-sm font-semibold ${item.id === character.id ? "bg-white/15" : "bg-primary/10 text-primary"}`}>{item.name.slice(0, 1)}</span><span><strong className="block text-sm">{item.name}</strong><small className={item.id === character.id ? "text-white/65" : "text-muted-foreground"}>{item.role}</small></span></button>)}</div></aside><div className="rounded-2xl border bg-card p-5 md:p-7"><div className="mb-6 flex items-center justify-between"><div><input className="border-0 bg-transparent text-2xl font-semibold outline-none" value={character.name} onChange={(e) => update({ name: e.target.value })} /><p className="mt-1 text-xs text-muted-foreground">ID CHAR-{String(character.id).slice(-4)} · 已加入章节上下文</p></div><Badge variant="secondary">正式设定</Badge></div><Tabs defaultValue="profile"><TabsList><TabsTrigger value="profile">形象与性格</TabsTrigger><TabsTrigger value="voice">说话与口音</TabsTrigger><TabsTrigger value="arc">动机与秘密</TabsTrigger></TabsList><TabsContent value="profile" className="mt-5 grid gap-5 md:grid-cols-2"><Field label="角色功能"><select className={selectClass} value={character.role} onChange={(e) => update({ role: e.target.value })}>{["主角", "关键角色", "对立角色", "次要角色"].map((x) => <option key={x}>{x}</option>)}</select></Field><Field label="年龄段"><select className={selectClass} value={character.age} onChange={(e) => update({ age: e.target.value })}>{["少年（13–17）", "青年（18–24）", "青年（25–35）", "中年（36–50）", "年长（51+）"].map((x) => <option key={x}>{x}</option>)}</select></Field><Field label="身形体态"><select className={selectClass} value={character.build} onChange={(e) => update({ build: e.target.value })}>{["清瘦", "匀称", "高挑", "健壮", "魁梧"].map((x) => <option key={x}>{x}</option>)}</select></Field><Field label="核心性格"><div className="flex flex-wrap gap-2">{options.map((x) => <button key={x} onClick={() => update({ personality: character.personality.includes(x) ? character.personality.filter((p) => p !== x) : [...character.personality.filter((p) => p !== "待完善"), x] })} className={`rounded-full border px-3 py-1.5 text-xs ${character.personality.includes(x) ? "border-primary bg-primary text-white" : "bg-background hover:border-primary/50"}`}>{x}</button>)}</div></Field></TabsContent><TabsContent value="voice" className="mt-5 grid gap-5 md:grid-cols-2"><Field label="说话风格"><select className={selectClass} value={character.speech} onChange={(e) => update({ speech: e.target.value })}>{["短句、直接、很少解释", "语速偏慢，习惯用反问", "礼貌正式，回避肯定回答", "自然", "用词华丽、长句为主"].map((x) => <option key={x}>{x}</option>)}</select></Field><Field label="语言与口音"><select className={selectClass} value={character.accent} onChange={(e) => update({ accent: e.target.value })}>{["普通话 · 无明显口音", "普通话 · 轻微江南口音", "普通话 · 轻微北方口音", "粤语 · 广府口音", "四川话 · 成都口音"].map((x) => <option key={x}>{x}</option>)}</select></Field><div className="md:col-span-2 rounded-xl bg-muted p-4 text-xs leading-5 text-muted-foreground">这些语言特征会进入章节生成上下文，用于保持角色说话方式前后一致。</div></TabsContent><TabsContent value="arc" className="mt-5 grid gap-5"><Field label="核心目标"><textarea className={`${selectClass} min-h-24`} value={character.goal} onChange={(e) => update({ goal: e.target.value })} /></Field><Field label="秘密（仅在允许章节后加入上下文）"><textarea className={`${selectClass} min-h-24`} value={character.secret} onChange={(e) => update({ secret: e.target.value })} /></Field></TabsContent></Tabs></div></div></>;
 }
 
 function CharacterCandidateReview({ current, candidate, busy, onAccept, onReject }: { current: Character; candidate: Character; busy: boolean; onAccept: () => void; onReject: () => void }) {
