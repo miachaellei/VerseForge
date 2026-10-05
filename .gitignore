@@ -43,6 +43,7 @@ src-tauri/target/
 /src-tauri/binaries/
 __pycache__/
 *.py[cod]
+.venv-worker/
 services/local-worker/build/
 services/local-worker/*.egg-info/
 /.wrangler/

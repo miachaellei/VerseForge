@@ -8,6 +8,7 @@ from dataclasses import asdict, dataclass
 from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
 from typing import Iterable
+from urllib.parse import unquote, urlsplit
 from xml.etree import ElementTree
 
 
@@ -266,7 +267,15 @@ def _parse_epub(data: bytes, document_hash: str) -> tuple[tuple[ParsedChapter, .
             if not href:
                 issues.append(QualityIssue("MISSING_SPINE_ITEM", "warning", f"EPUB 阅读顺序引用了不存在的条目：{idref}"))
                 continue
-            member_name = str(opf_dir / PurePosixPath(href.split("#", 1)[0]))
+            # EPUB manifest hrefs are URLs, not literal ZIP member names. Real books
+            # commonly percent-encode spaces/non-ASCII characters and may include a
+            # query or fragment. Resolve the decoded path relative to the OPF file.
+            href_path = unquote(urlsplit(href).path)
+            member_path = opf_dir / PurePosixPath(href_path)
+            if member_path.is_absolute() or ".." in member_path.parts:
+                issues.append(QualityIssue("UNSAFE_CONTENT_PATH", "warning", f"EPUB 正文路径不安全：{href}"))
+                continue
+            member_name = str(member_path)
             if member_name not in members:
                 issues.append(QualityIssue("MISSING_CONTENT_FILE", "warning", f"EPUB 正文文件不存在：{member_name}"))
                 continue

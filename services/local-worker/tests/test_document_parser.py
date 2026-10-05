@@ -74,6 +74,21 @@ class DocumentParserTests(unittest.TestCase):
             with self.assertRaisesRegex(DocumentParseError, "不安全路径"):
                 parse_document(path, "project-1")
 
+    def test_epub_decodes_percent_encoded_manifest_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "encoded-path.epub"
+            encoded_opf = OPF.replace("chapter1.xhtml", "chapter%201.xhtml")
+            with zipfile.ZipFile(path, "w") as archive:
+                archive.writestr("mimetype", "application/epub+zip")
+                archive.writestr("META-INF/container.xml", CONTAINER_XML)
+                archive.writestr("OPS/content.opf", encoded_opf)
+                archive.writestr("OPS/chapter 1.xhtml", "<html><body><h1>第一章</h1><p>含空格路径的正文。</p></body></html>")
+                archive.writestr("OPS/chapter2.xhtml", "<html><body><h1>第二章</h1><p>第二章正文。</p></body></html>")
+            result = parse_document(path, "project-1")
+
+        self.assertEqual(len(result.chapters), 2)
+        self.assertEqual(result.chapters[1].source_path, "OPS/chapter 1.xhtml")
+
     def test_pdf_extracts_text_layer_and_reports_missing_headings(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "book.pdf"
